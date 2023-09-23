@@ -252,22 +252,25 @@ def calc_cyclomatic_complexity(lines, file_extension):
     
 def calc_halstead_metrics(lines, file_extension):
     # source: https://www.geeksforgeeks.org/software-engineering-halsteads-software-metrics/
-    n1_operators_distinct = set()
-    n2_operands_distinct = set()  # sets are distinct, which halstead equation requires
 
     N1_operators_total = list()
     N2_operands_total = list()  # lists are not distinct (total), which halstead equation requires
+    operators = ['+', '-', '*', '/', '%', '=', '==', '!=', '<', '>', '<=', '>=', 'and ', 'or ', 'not ', 'if ', 'else ', 'while ', 'for ', 'def ', 'return ']
 
     code_lines, comment_lines = split_into_code_lines_and_comment_lines(lines, file_extension)  # halstead ignores comments
     for line in code_lines:
-        words = line.split()
-        for word in words:
-            if word.isalnum():
-                n2_operands_distinct.add(word)
-                N2_operands_total.append(word)
+        tokens = line.split()
+        for token in tokens:
+            if token in operators:
+                N1_operators_total.append(token)
+            elif token.isalnum():
+                N2_operands_total.append(token)
             else:
-                n1_operators_distinct.add(word)
-                N1_operators_total.append(word)
+                continue
+
+    # use set to make distinct
+    n1_operators_distinct = set(N1_operators_total)
+    n2_operands_distinct = set(N2_operands_total)
 
     n_program_vocab = len(n1_operators_distinct) + len(n2_operands_distinct)  # total distinct
     N_program_len = len(N1_operators_total) + len(N2_operands_total)  # total
@@ -278,12 +281,36 @@ def calc_halstead_metrics(lines, file_extension):
     bugs_deliver_b = int((e_effort ** 2) / 3000)
 
     halstead_metrics = {
+        # total count of all operators, including duplicates
+        # how many times operators are used overall in the code
+        "n1_operators_distinct": len(n1_operators_distinct),
+        # total count of all operands used in the code, including duplicates
+        # how many times operands (variables or values) are used overall 
+        "n2_operands_distinct": len(n2_operands_distinct),
+        # count of unique operators (e.g., +, -, =, if)
+        # how many different types of operations or actions are performed
+        "N1_operators_total": len(N1_operators_total),
+        # count of unique operands (e.g., variables, constants)
+        # how many different variables, values, or data elements are used
+        "N2_operands_total": len(N2_operands_total),
+        # total length of the code, calculated as the sum of distinct operators and operands
+        # total number of unique elements (operators and operands)
         "N_program_len": N_program_len,
+        # total count of unique elements, calculated as the sum of distinct operators and operands
+        # total number of different things (operators and operands)
         "n_program_vocab": n_program_vocab,
+        # measure of the "size" or "complexity"
+        # combines code length and the variety of elements used, giving an idea of code size
         "v_volume": v_volume,
+        # complexity of understanding the code
+        # how hard it is to understand the code based on the mix of unique operators and operands
         "d_difficulty": d_difficulty,
+        # effort required to write or understand the code
+        # work needed to deal with or create the code based on its complexity and size
         "e_effort": e_effort,
+        # time to develop the code, typically measured in hours, days, or weeks
         "implement_time_t": implement_time_t,
+        # number of defects/issues present in the code
         "bugs_deliver_b": bugs_deliver_b,
     }
 
