@@ -6,7 +6,7 @@ from tabulate import tabulate  # for pretty print
 import datetime  # for timestamp
 import math  # for halstead
 
-target_codepath = r"G:\My Drive\github\acme_model_2"  # update as needed
+target_codepath = r"G:\My Drive\github\software_quality_metrics\scripts"  # update as needed
 directories_to_skip = ["venv", "conda", "git", "renv"]  # update as needed
 handled_extensions = (".py", ".r", ".sql")
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -37,44 +37,80 @@ def read_and_strip_file(filepath):
     return file_and_contents
 
 
-def strip_comments_and_blocks(lines, file_extension):
-
-    if file_extension == ".py":
-        comment_line_indicators = ("#")
-        code_block_starts = ("'''", '"""')
-        code_block_stops = ("'''", '"""')
+def split_into_code_lines_and_comment_lines(lines, file_extension):
+    if file_extension == ".py":  # ISSUE: recognizes multiline strings as comments
+        comment_indicator = ("#")
+        comment_block_start = ("'''", '"""')
+        comment_block_stop = ("'''", '"""')
     elif file_extension == ".r":
-        comment_line_indicators = ("#")
-        code_block_starts = ("'''", '"""')
-        code_block_stops = ("'''", '"""')
+        comment_indicator = ("#")
+        comment_block_start = ("'''", '"""')
+        comment_block_stop = ("'''", '"""')
     elif file_extension == ".sql":
-        comment_line_indicators = ("--")
-        code_block_starts = ("/*")
-        code_block_stops = ("*/")
+        comment_indicator = ("--")
+        comment_block_start = ("/*")
+        comment_block_stop = ("*/")
     else:
         print("Unhandled file extension")
         exit
 
-    filtered_lines = []
+    code_lines = []
+    comment_lines = []
     in_comment_block = False
+    previous_line = None  # placeholder before being called in loop
 
     for line in lines:
-        # ignore comment blocks start, end, and middle content
-        if not in_comment_block:
-            if line.strip().startswith(code_block_starts):
-                in_comment_block = True
-            elif line.startswith(comment_line_indicators):
-                continue
-            elif line:
-                filtered_lines.append(line)
-        else:  # ignore lines until end of comment block detected
-            if line.strip().endswith(code_block_stops):
+        # parsing python is difficult due to whitespace, no returns, many docstrings, etc. so wishy washy...
+        # check for start of docstring
+        if (previous_line is not None
+            and "def " in previous_line 
+            and (line == "'''" or line == '"""')):  # line contains only ''' appearing after def, we assume docstring begins
+            in_comment_block = True
+            comment_lines.append(line)
+            continue
+        # check for only triple quote appearing on line, not following a def statement
+        elif (line == "'''" or line == '"""'):  # line contains only ''' appearing NOT after def, we ASSUME docstring ends
+            in_comment_block = False
+            comment_lines.append(line)
+            continue
+        # check for single line comment block
+        elif line.startswith(comment_block_start) and line.endswith(comment_block_start):  # '''hello''' single line docstring
+            in_comment_block = False
+            comment_lines.append(line)
+            continue
+        # check for comment block start
+        elif line.startswith(comment_block_start):
+            in_comment_block = True
+            comment_lines.append(line)
+        # check for comment block end
+        if in_comment_block:
+            # which start and stop with the same string
+            if line.endswith(comment_block_stop):
                 in_comment_block = False
+                # this prevents double appending a multiline comment blocks 
+                # with starts AND ends with a multiline comments, e.g. /* hello world */
+                if line not in comment_lines:
+                    comment_lines.append(line)
+            else:
+                # this prevents double appending a multiline comment blocks 
+                # with starts AND ends with a multiline comments, e.g. /* hello world */
+                if line not in comment_lines:
+                    comment_lines.append(line)
+            continue
 
-    return filtered_lines
+        # if not in a comment block, categorize as code or comment line
+        if line.startswith(comment_indicator):
+            comment_lines.append(line)
+        elif line:
+            code_lines.append(line)
+
+        previous_line = line
+
+    return code_lines, comment_lines
 
 
 def extract_functions_py(lines):
+    """shortcoming: the final function will include all following top level lines of code."""
     functions = []
     current_function = None
     current_function_lines = []
@@ -162,14 +198,19 @@ def count_lines_of_code(lines, file_extension):
     loc_comments includes code block start and end lines.
     """
     loc_total = len(lines)  # get total lines
-    filtered_lines = strip_comments_and_blocks(lines, file_extension)
+    code_lines, comment_lines = split_into_code_lines_and_comment_lines(lines, file_extension)
 
     # handle for when functions are all comments (eg code stubs)
-    if filtered_lines is None:
+    if code_lines is None:
         loc_code = 0
     else:
-        loc_code = len(filtered_lines)
-    loc_comments = loc_total - loc_code
+        loc_code = len(code_lines)
+
+    # handle for when functions are all code
+    if comment_lines is None:
+        comment_lines = 0
+    else:
+        loc_comments = len(comment_lines)
 
     loc = {
         "loc_total": loc_total,
@@ -182,7 +223,7 @@ def count_lines_of_code(lines, file_extension):
 
 
 def calc_cyclomatic_complexity(lines, file_extension):
-    filtered_lines = strip_comments_and_blocks(lines, file_extension)
+    code_lines, comment_lines = split_into_code_lines_and_comment_lines(lines, file_extension)
 
     cyclomatic_complexity = 1  # base complexity
 
@@ -198,7 +239,7 @@ def calc_cyclomatic_complexity(lines, file_extension):
     else:
         decision_points = ()
 
-    for line in filtered_lines:
+    for line in code_lines:
 
         decision_points = 0
         for control_flow_keyword in control_flow_keywords:
@@ -217,8 +258,8 @@ def calc_halstead_metrics(lines, file_extension):
     N1_operators_total = list()
     N2_operands_total = list()  # lists are not distinct (total), which halstead equation requires
 
-    filtered_lines = strip_comments_and_blocks(lines, file_extension)  # halstead ignores comments
-    for line in filtered_lines:
+    code_lines, comment_lines = split_into_code_lines_and_comment_lines(lines, file_extension)  # halstead ignores comments
+    for line in code_lines:
         words = line.split()
         for word in words:
             if word.isalnum():
