@@ -1,0 +1,10 @@
+.\scripts\maestro.py
+    F 60:0 get_user_specified_models - A
+    F 75:0 insert_queued_models - A
+    F 127:0 group_models_inserted_into_database - A
+    F 39:0 get_relative_cwd - A
+    F 47:0 increment_group_id - A
+    F 101:0 update_queued_model_as_complete - A
+
+6 blocks (classes, functions, methods) analyzed.
+Average complexity: A (1.6666666666666667)

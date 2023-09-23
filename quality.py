@@ -1,0 +1,356 @@
+# https://learn.microsoft.com/en-us/visualstudio/code-quality/code-metrics-values?view=vs-2022
+
+import os
+import pandas as pd
+from tabulate import tabulate  # for pretty print
+import datetime  # for timestamp
+import math  # for halstead
+
+target_codepath = r"G:\My Drive\github\acme_model_2"  # update as needed
+directories_to_skip = ["venv", "conda", "git", "renv"]  # update as needed
+handled_extensions = (".py", ".r", ".sql")
+timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+module_directory = os.path.dirname(os.path.abspath(__file__))
+code_metrics = {}
+
+def read_and_strip_file(filepath):
+    with open(filepath, 'r') as file:
+        lines = file.readlines()
+
+        # remove blank lines and lower case
+        stripped_lines = []
+        for line in lines:
+            stripped_line = line.strip().lower()
+            if stripped_line:
+                stripped_lines.append(stripped_line)
+
+    filename = os.path.basename(filepath).lower()
+    file_extension = os.path.splitext(filename)[1].lower()
+    
+    # return a dictionary
+    file_and_contents = {
+        "filename": filename,
+        "file_extension": file_extension,
+        "lines": stripped_lines,
+    }
+    
+    return file_and_contents
+
+
+def strip_comments_and_blocks(lines, file_extension):
+
+    if file_extension == ".py":
+        comment_line_indicators = ("#")
+        code_block_starts = ("'''", '"""')
+        code_block_stops = ("'''", '"""')
+    elif file_extension == ".r":
+        comment_line_indicators = ("#")
+        code_block_starts = ("'''", '"""')
+        code_block_stops = ("'''", '"""')
+    elif file_extension == ".sql":
+        comment_line_indicators = ("--")
+        code_block_starts = ("/*")
+        code_block_stops = ("*/")
+    else:
+        print("Unhandled file extension")
+        exit
+
+    filtered_lines = []
+    in_comment_block = False
+
+    for line in lines:
+        # ignore comment blocks start, end, and middle content
+        if not in_comment_block:
+            if line.strip().startswith(code_block_starts):
+                in_comment_block = True
+            elif line.startswith(comment_line_indicators):
+                continue
+            elif line:
+                filtered_lines.append(line)
+        else:  # ignore lines until end of comment block detected
+            if line.strip().endswith(code_block_stops):
+                in_comment_block = False
+
+    return filtered_lines
+
+
+def extract_functions_py(lines):
+    functions = []
+    current_function = None
+    current_function_lines = []
+
+    for line in lines:  # the whole program
+        # this whole block only captures function name
+        if line.startswith("def "):
+
+            # when first reaches def, None and skips this...
+            if current_function:
+                functions.append({
+                    "function_name": current_function,
+                    "function_lines": current_function_lines,
+                })
+
+            # ...then picks up function name
+            current_function = line[4:].split("(")[0]  # transform "def meow(name: str) -> meow_name:" to "meow"
+            current_function_lines = [line]
+        elif current_function:
+            current_function_lines.append(line)
+
+    if current_function:
+        functions.append({
+            "function_name": current_function,
+            "function_lines": current_function_lines,
+        })
+
+    return functions
+
+
+def extract_functions_r(lines):
+    functions = []
+    current_function = None
+    current_function_lines = []
+
+    for line in lines:  # the whole program
+        # this whole block only captures function name
+        if ("function(" in line and "{" in line):
+
+            # when first reaches def, None and skips this...
+            if current_function:
+                functions.append({
+                    "function_name": current_function,
+                    "function_lines": current_function_lines,
+                })
+
+            # ...then picks up function name
+            current_function = line.split("<-")[0].strip()  # transform "meow <- function(name) {" to "meow"
+            current_function_lines = [line]
+        elif current_function:
+            current_function_lines.append(line)
+
+    if current_function:
+        functions.append({
+            "function_name": current_function,
+            "function_lines": current_function_lines,
+        })
+
+    return functions
+
+
+def extract_functions_sql(lines):
+    functions = []
+
+    functions.append({
+        "function_name": "none",
+        "function_lines": lines,
+    })
+
+    return functions
+
+
+def extract_top_level_code(lines):
+    top_level_code = {
+        "function_name": "_FILE_TOTAL",  # _ so that it appears first after df sort
+        "function_lines": lines,
+    }
+    return [top_level_code]
+
+
+def count_lines_of_code(lines, file_extension):
+    """
+    loc_total excludes empty lines.
+    loc_code includes first function assignment line, as well as returns.
+    loc_comments includes code block start and end lines.
+    """
+    loc_total = len(lines)  # get total lines
+    filtered_lines = strip_comments_and_blocks(lines, file_extension)
+
+    # handle for when functions are all comments (eg code stubs)
+    if filtered_lines is None:
+        loc_code = 0
+    else:
+        loc_code = len(filtered_lines)
+    loc_comments = loc_total - loc_code
+
+    loc = {
+        "loc_total": loc_total,
+        "loc_code": loc_code,
+        "loc_comments": loc_comments,
+    }
+    print(loc)
+
+    return loc
+
+
+def calc_cyclomatic_complexity(lines, file_extension):
+    filtered_lines = strip_comments_and_blocks(lines, file_extension)
+
+    cyclomatic_complexity = 1  # base complexity
+
+    # conditionally search for language specific control flow keywords
+    if file_extension == ".py":
+        # TODO: improve according to https://radon.readthedocs.io/en/latest/intro.html#cyclomatic-complexity
+        control_flow_keywords = ("if ", "elif ", "for ", "while ", "except", "with ", 
+                                 "assert ", "comprehension ", "and ", "or " "map(", "lambda ")
+    elif file_extension == ".r" or file_extension == ".rmd": 
+        control_flow_keywords = ("if ", "else if ", "while ", "for ")
+    elif file_extension == ".sql":
+        control_flow_keywords = ("select ", "from ", "where ", "join ", "inner join ", "left join ", "right join ", "outer join ", "union ", "except ", "intersect ")
+    else:
+        decision_points = ()
+
+    for line in filtered_lines:
+
+        decision_points = 0
+        for control_flow_keyword in control_flow_keywords:
+            decision_points += line.count(control_flow_keyword)
+
+        cyclomatic_complexity += decision_points
+
+    return cyclomatic_complexity
+
+    
+def calc_halstead_metrics(lines, file_extension):
+    # source: https://www.geeksforgeeks.org/software-engineering-halsteads-software-metrics/
+    n1_operators_distinct = set()
+    n2_operands_distinct = set()  # sets are distinct, which halstead equation requires
+
+    N1_operators_total = list()
+    N2_operands_total = list()  # lists are not distinct (total), which halstead equation requires
+
+    filtered_lines = strip_comments_and_blocks(lines, file_extension)  # halstead ignores comments
+    for line in filtered_lines:
+        words = line.split()
+        for word in words:
+            if word.isalnum():
+                n2_operands_distinct.add(word)
+                N2_operands_total.append(word)
+            else:
+                n1_operators_distinct.add(word)
+                N1_operators_total.append(word)
+
+    n_program_vocab = len(n1_operators_distinct) + len(n2_operands_distinct)  # total distinct
+    N_program_len = len(N1_operators_total) + len(N2_operands_total)  # total
+    v_volume = int(N_program_len * math.log2(n_program_vocab)) if n_program_vocab > 0 else 0  # does this indicate filesize?
+    d_difficulty = (len(n1_operators_distinct) / 2) * (len(N2_operands_total) / len(n2_operands_distinct)) if len(n2_operands_distinct) > 0 else 0
+    e_effort = int(d_difficulty * v_volume)
+    implement_time_t = int(e_effort / 18)
+    bugs_deliver_b = int((e_effort ** 2) / 3000)
+
+    halstead_metrics = {
+        "N_program_len": N_program_len,
+        "n_program_vocab": n_program_vocab,
+        "v_volume": v_volume,
+        "d_difficulty": d_difficulty,
+        "e_effort": e_effort,
+        "implement_time_t": implement_time_t,
+        "bugs_deliver_b": bugs_deliver_b,
+    }
+
+    return halstead_metrics
+
+def calc_maintainability(v_volume, cyclomatic_complexity, loc):
+    A = 171
+    B = 5.2
+    C = 0.23
+    D = 16.2
+
+    maintainability_index = max(0, (A
+                                    - (B * math.log(v_volume)) 
+                                    - (C * cyclomatic_complexity) 
+                                    - (D * math.log(loc))
+                                    ) * 100 / A)
+
+    # simplify bc who cares
+    maintainability_index = int(maintainability_index)
+
+    return maintainability_index
+
+
+def extract_functions(file_contents, file_extension):
+    """Extract functions from scripts, given file extension."""
+    if file_extension == ".py":
+        return extract_functions_py(file_contents)
+    elif file_extension == ".r":
+        return extract_functions_r(file_contents)
+    elif file_extension == ".sql":
+        return extract_functions_sql(file_contents)
+    else:
+        print(f"unhandled extension: {file_extension}")
+        return []
+
+
+def skippable_directory(directory_name):
+    return directory_name in directories_to_skip
+
+
+def collect_code_metrics(directory):
+
+    code_metrics = []
+    for root, dirs, files in os.walk(directory):
+
+        # remove unwanted dirs from code scan
+        filtered_dirs = []
+        for dir in dirs:
+            if dir not in directories_to_skip:
+                filtered_dirs.append(dir)
+        dirs[:] = filtered_dirs  # does not replace dirs, but rather updates it
+        # this way, as os.walk continues traversal, it uses updates dirs list
+
+        for each_file in files:
+            if each_file.lower().endswith(handled_extensions):  # often you find .R, .SQL in the wild
+                full_filepath = os.path.join(root, each_file)
+                file_and_contents = read_and_strip_file(full_filepath)
+                functions = extract_functions(file_and_contents["lines"], file_and_contents["file_extension"])
+
+                for each_function in functions:
+                    loc = count_lines_of_code(each_function["function_lines"], file_and_contents["file_extension"])
+                    complexity = calc_cyclomatic_complexity(each_function["function_lines"], file_and_contents["file_extension"])
+                    halstead_metrics = calc_halstead_metrics(each_function["function_lines"], file_and_contents["file_extension"])
+                    maintainability_index =  calc_maintainability(halstead_metrics["v_volume"], complexity, loc["loc_code"])
+
+                    code_metrics.append({
+                        "run_timestamp": timestamp,
+                        "filepath": os.path.dirname(full_filepath),
+                        "file_extension": file_and_contents["file_extension"],
+                        "filename": file_and_contents["filename"],
+                        "function_name": each_function["function_name"],
+                        **loc,  # this is called "dict unpacking"
+                        "cyclocomplexity": complexity,
+                        **halstead_metrics,
+                        "maintainability_index": maintainability_index,
+                    })
+
+                # metrics for code not found inside functions, aka global or top level code
+                top_level_code = extract_top_level_code(file_and_contents["lines"])
+                loc_module = count_lines_of_code(top_level_code[0]["function_lines"], file_and_contents["file_extension"])
+                complexity_module = calc_cyclomatic_complexity(top_level_code[0]["function_lines"], file_and_contents["file_extension"])
+                halstead_metrics_module = calc_halstead_metrics(top_level_code[0]["function_lines"], file_and_contents["file_extension"])
+                maintainability_index_module = calc_maintainability(halstead_metrics_module["v_volume"], complexity_module, loc_module["loc_code"])
+
+                # this will append a fina row per script for top_level_code metrics
+                code_metrics.append({
+                    "run_timestamp": timestamp,
+                    "filepath": os.path.dirname(full_filepath),
+                    "file_extension": file_and_contents["file_extension"],
+                    "filename": file_and_contents["filename"],
+                    "function_name": top_level_code[0]["function_name"],
+                    **loc_module,
+                    "cyclocomplexity": complexity_module,
+                    **halstead_metrics_module,
+                    "maintainability_index": maintainability_index_module,
+                })
+
+    return code_metrics
+
+
+code_metrics = collect_code_metrics(target_codepath)
+
+# create df of metrics
+df = pd.DataFrame.from_records(code_metrics)
+desired_order = ["filepath", "file_extension", "filename", "function_name"]
+df.sort_values(by=desired_order, inplace=True)
+df.reset_index(drop=True, inplace=True)
+
+print(tabulate(df, headers="keys", tablefmt="fancy_grid"))
+output_path = os.path.join(module_directory, "output.csv")
+df.to_csv(output_path, index=False)

@@ -1,0 +1,25 @@
+run_timestamp,filepath,filename,file_extension,function_name,loc_total,loc_code,loc_comments,cyclocomplexity,len_n,vocab_n,volume_v,difficulty_d,effort_e,implement_time_t,bugs_deliver_b,maintainability_index
+20230911_194709,G:\My Drive\github\acme_model_2\standup_db,standup_db.py,.py,get_relative_cwd,13,4,9,1,10,10,33,20,660,36,145,64
+20230911_194709,G:\My Drive\github\acme_model_2\standup_db,standup_db.py,.py,replace_database,12,3,9,1,9,9,28,15,420,23,58,66
+20230911_194709,G:\My Drive\github\acme_model_2\standup_db,standup_db.py,.py,create_tables,18,8,10,1,22,22,98,29,2842,157,2692,58
+20230911_194709,G:\My Drive\github\acme_model_2\standup_db,standup_db.py,.py,insert_into,18,8,10,1,22,22,98,37,3626,201,4382,58
+20230911_194709,G:\My Drive\github\acme_model_2\standup_db,standup_db.py,.py,select_print_topn,58,35,23,3,70,70,429,140,60060,3336,1202401,42
+20230911_194709,G:\My Drive\github\acme_model_2\standup_db\data_projected\sql,seed.sql,.sql,none,72,63,9,1,175,175,1303,5016,6535848,363102,14239103026,37
+20230911_194709,G:\My Drive\github\acme_model_2\standup_db\data_projected\sql,schema.sql,.sql,none,84,75,9,15,66,66,398,81,32238,1791,346429,37
+20230911_194709,G:\My Drive\github\acme_model_2\standup_db\data_historical\sql,schema.sql,.sql,none,94,85,9,17,85,85,544,96,52224,2901,909115,35
+20230911_194709,G:\My Drive\github\acme_model_2\standup_db\data_historical\sql,seed.sql,.sql,none,447,439,8,1,526,526,4754,34321,163162034,9064557,8873949779672,16
+20230911_194709,G:\My Drive\github\acme_model_2\standup_db\data_predicted\sql,schema.sql,.sql,none,91,81,10,16,68,68,413,87,35931,1996,430345,36
+20230911_194709,G:\My Drive\github\acme_model_2\scripts,maestro.py,.py,get_relative_cwd,8,1,7,1,4,4,8,6,48,2,0,73
+20230911_194709,G:\My Drive\github\acme_model_2\scripts,maestro.py,.py,increment_group_id,13,1,12,1,6,6,15,15,225,12,16,67
+20230911_194709,G:\My Drive\github\acme_model_2\scripts,maestro.py,.py,get_user_specified_models,15,1,14,1,5,5,11,10,110,6,4,66
+20230911_194709,G:\My Drive\github\acme_model_2\scripts,maestro.py,.py,insert_queued_models,26,10,16,1,30,30,147,97,14259,792,67773,53
+20230911_194709,G:\My Drive\github\acme_model_2\scripts,maestro.py,.py,update_queued_model_as_complete,26,11,15,1,25,25,116,32,3712,206,4592,54
+20230911_194709,G:\My Drive\github\acme_model_2\scripts,maestro.py,.py,group_models_inserted_into_database,101,13,88,1,29,29,140,20,2800,155,2613,41
+20230911_194709,G:\My Drive\github\acme_model_2\functions,data_handling.r,.r,connect_to_database <- function,13,6,7,1,16,16,64,56,3584,199,4281,62
+20230911_194709,G:\My Drive\github\acme_model_2\functions,data_handling.r,.r,get_table_data <- function,16,7,9,1,24,24,110,45,4950,275,8167,59
+20230911_194709,G:\My Drive\github\acme_model_2\functions,data_handling.r,.r,write_to_database <- function,13,3,10,1,14,14,53,42,2226,123,1651,63
+20230911_194709,G:\My Drive\github\acme_model_2\functions,data_handling.r,.r,write_to_csv <- function,20,6,14,1,20,20,86,90,7740,430,19969,57
+20230911_194709,G:\My Drive\github\acme_model_2\functions,data_handling.r,.r,display_verification <- function,4,4,0,1,17,17,69,63,4347,241,6298,73
+20230911_194709,G:\My Drive\github\acme_model_2\functions,setup_env.r,.r,setup_env <- function,30,19,11,2,33,33,166,165,27390,1521,250070,51
+20230911_194709,G:\My Drive\github\acme_model_2\functions,stats.r,.r,estimate <- function,13,7,6,1,28,28,134,51,6834,379,15567,60
+20230911_194709,G:\My Drive\github\acme_model_2\functions,stats.r,.r,make_predictions <- function,4,4,0,1,13,13,48,78,3744,208,4672,74
