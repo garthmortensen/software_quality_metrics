@@ -38,6 +38,9 @@ def read_and_strip_file(filepath):
 
 
 def split_into_code_lines_and_comment_lines(lines, file_extension):
+    # code can be condensed to many lines, so line count isnt everything
+    # readability matters!
+
     if file_extension == ".py":  # ISSUE: recognizes multiline strings as comments
         comment_indicator = ("#")
         comment_block_start = ("'''", '"""')
@@ -223,6 +226,9 @@ def count_lines_of_code(lines, file_extension):
 
 
 def calc_cyclomatic_complexity(lines, file_extension):
+    # flat is better. Rotate python code 90 degrees counter clockwise, and the mountain range indicates challenge
+    # check gitblame to see why complications are added
+    # interpretation: https://radon.readthedocs.io/en/latest/commandline.html
     code_lines, comment_lines = split_into_code_lines_and_comment_lines(lines, file_extension)
 
     cyclomatic_complexity = 1  # base complexity
@@ -251,11 +257,24 @@ def calc_cyclomatic_complexity(lines, file_extension):
 
     
 def calc_halstead_metrics(lines, file_extension):
+    # halstead metrics been around 50 years
     # source: https://www.geeksforgeeks.org/software-engineering-halsteads-software-metrics/
+
+    # operands = sum(values) + sum(variables)
+    # operators = sum(operators)
+    # length = operands + operators
+    # vocabulary = distinct(operands) + distinct(operators)
+    # volume = length x log2(vocab) = better than loc
+    # difficulty = (distinct(operators) / 2) x (distinct(operands) / sum(operands)) = calulation of how youd reuse code and how much code you used to solve it
+    # effort = volume x difficulty?
 
     N1_operators_total = list()
     N2_operands_total = list()  # lists are not distinct (total), which halstead equation requires
-    operators = ['+', '-', '*', '/', '%', '=', '==', '!=', '<', '>', '<=', '>=', 'and ', 'or ', 'not ', 'if ', 'else ', 'while ', 'for ', 'def ', 'return ']
+
+    operators = ['+', '-', '*', '/', '%', '=',  # arithmetic
+                '==', '!=', '<', '>', '<=', '>=',  # comparisons
+                'and ', '& ', 'or ', '| ',  'not ', '!',  # logic
+                'if ', 'else ', 'while ', 'for ', 'def ', 'function ', 'return ',]  # keywords
 
     code_lines, comment_lines = split_into_code_lines_and_comment_lines(lines, file_extension)  # halstead ignores comments
     for line in code_lines:
@@ -274,11 +293,11 @@ def calc_halstead_metrics(lines, file_extension):
 
     n_program_vocab = len(n1_operators_distinct) + len(n2_operands_distinct)  # total distinct
     N_program_len = len(N1_operators_total) + len(N2_operands_total)  # total
-    v_volume = int(N_program_len * math.log2(n_program_vocab)) if n_program_vocab > 0 else 0  # does this indicate filesize?
+    v_volume = int(N_program_len * math.log(n_program_vocab, 2)) if n_program_vocab > 0 else 0  # does this indicate filesize?
     d_difficulty = (len(n1_operators_distinct) / 2) * (len(N2_operands_total) / len(n2_operands_distinct)) if len(n2_operands_distinct) > 0 else 0
-    e_effort = int(d_difficulty * v_volume)
-    implement_time_t = int(e_effort / 18)
-    bugs_deliver_b = int((e_effort ** 2) / 3000)
+    e_effort = int(d_difficulty * v_volume)  # good
+    implement_time_t = int(e_effort / 18)  # good
+    bugs_deliver_b = int((e_effort ** 2) / 3000)  # good
 
     halstead_metrics = {
         # total count of all operators, including duplicates
@@ -322,6 +341,15 @@ def calc_maintainability(v_volume, cyclomatic_complexity, loc):
     C = 0.23
     D = 16.2
 
+    # MS research
+    # 00-25  = unmaintainable - single responsibility principal. no code should try to do everything. 
+    # 25-30  = concerning
+    # 50-75  = needs improvements. common in the real world
+    # 75-100 = excellent
+
+    # based on halstead metrics
+    # more syntax/variables, more nesting, more code = unmaintainable
+    # fewer syntax/vafiables, flat code, shorter code = maintainable
     maintainability_index = max(0, (A
                                     - (B * math.log(v_volume)) 
                                     - (C * cyclomatic_complexity) 
