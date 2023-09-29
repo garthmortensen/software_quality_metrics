@@ -1,5 +1,3 @@
-# https://learn.microsoft.com/en-us/visualstudio/code-quality/code-metrics-values?view=vs-2022
-
 import os
 import pandas as pd
 from tabulate import tabulate  # for pretty print
@@ -108,12 +106,25 @@ class CodeSplitter:
 
 
 class FunctionExtractor:
+
+    def extract_functions(self, lines, file_extension):
+        if file_extension == ".py":
+            return self.extract_functions_py(lines)
+        elif file_extension == ".r":
+            return self.extract_functions_r(lines)
+        elif file_extension == ".sql":
+            return self.extract_functions_sql(lines)
+        else:
+            return []
+
+
     def extract_top_level_code(self, lines):
         top_level_code = {
             "function_name": "_FILE_TOTAL",  # _ so that it appears first after df sort
             "function_lines": lines,
         }
         return [top_level_code]
+
 
     def extract_functions_py(self, lines):
         """shortcoming: the final function will include all following top level lines of code."""
@@ -293,7 +304,7 @@ class CodeMetricsCalculator:
         n_program_vocab = len(n1_operators_distinct) + len(n2_operands_distinct)  # total distinct
         N_program_len = len(N1_operators_total) + len(N2_operands_total)  # total
         v_volume = int(N_program_len * math.log(n_program_vocab, 2)) if n_program_vocab > 0 else 0  # does this indicate filesize?
-        d_difficulty = (len(n1_operators_distinct) / 2) * (len(N2_operands_total) / len(n2_operands_distinct)) if len(n2_operands_distinct) > 0 else 0
+        d_difficulty = round((len(n1_operators_distinct) / 2) * (len(N2_operands_total) / len(n2_operands_distinct)), 2) if len(n2_operands_distinct) > 0 else 0
         e_effort = int(d_difficulty * v_volume)  # good
         implement_time_t = int(e_effort / 18)  # good
         bugs_deliver_b = int((e_effort ** 2) / 3000)  # good
@@ -335,29 +346,27 @@ class CodeMetricsCalculator:
         return halstead_metrics
 
     def calc_maintainability(self, v_volume, cyclomatic_complexity, loc):
+        # https://learn.microsoft.com/en-us/visualstudio/code-quality/code-metrics-values?view=vs-2022
+
+        # MS Research magic numbers
         A = 171
         B = 5.2
         C = 0.23
         D = 16.2
 
-        # MS research
+        # based on halstead metrics
+        # more syntax/variables, more nesting, more code = unmaintainable
+        # fewer syntax/vafiables, flat code, shorter code = maintainable
+        maintainability_index = int(max(0, (A
+                                        - (B * math.log(v_volume)) 
+                                        - (C * cyclomatic_complexity) 
+                                        - (D * math.log(loc))
+                                        ) * 100 / A))
+
         # 00-25  = unmaintainable - single responsibility principal. no code should try to do everything. 
         # 25-30  = concerning
         # 50-75  = needs improvements. common in the real world
         # 75-100 = excellent
-
-        # based on halstead metrics
-        # more syntax/variables, more nesting, more code = unmaintainable
-        # fewer syntax/vafiables, flat code, shorter code = maintainable
-        maintainability_index = max(0, (A
-                                        - (B * math.log(v_volume)) 
-                                        - (C * cyclomatic_complexity) 
-                                        - (D * math.log(loc))
-                                        ) * 100 / A)
-
-        # simplify bc who cares
-        maintainability_index = int(maintainability_index)
-
         return maintainability_index
 
 
@@ -374,6 +383,7 @@ class CodeAnalyzer:
         self.file_reader = FileReader()  # create an instance of FileReader
         self.function_extractor = FunctionExtractor()  # create an instance of FunctionExtractor
         self.code_metric_calculator = CodeMetricsCalculator()
+
 
     def extract_functions(self, file_contents, file_extension):
         """Extract functions from scripts, given file extension."""
@@ -395,62 +405,74 @@ class CodeAnalyzer:
     def collect_code_metrics(self, directory):
         code_metrics = []
         for root, dirs, files in os.walk(directory):
-
-            # remove unwanted dirs from code scan
-            filtered_dirs = []
-            for dir in dirs:
-                if dir not in directories_to_skip:
-                    filtered_dirs.append(dir)
-            dirs[:] = filtered_dirs  # does not replace dirs, but rather updates it
-            # this way, as os.walk continues traversal, it uses updates dirs list
+            filtered_dirs = self.filter_directories(dirs)
+            dirs[:] = filtered_dirs
 
             for each_file in files:
-                if each_file.lower().endswith(handled_extensions):  # often you find .R, .SQL in the wild
+                if each_file.lower().endswith(self.handled_extensions):
                     full_filepath = os.path.join(root, each_file)
-                    file_and_contents = self.file_reader.read_and_strip_file(full_filepath)  # we've instantiated file_reader and can call methods
-                    functions = self.extract_functions(file_and_contents["lines"], file_and_contents["file_extension"])
+                    file_and_contents = self.file_reader.read_and_strip_file(full_filepath)
+                    functions = self.extract_functions(file_and_contents)
 
-                    for each_function in functions:
-                        loc = self.code_metric_calculator.count_lines_of_code(each_function["function_lines"], file_and_contents["file_extension"])
-                        complexity = self.code_metric_calculator.calc_cyclomatic_complexity(each_function["function_lines"], file_and_contents["file_extension"])
-                        halstead_metrics = self.code_metric_calculator.calc_halstead_metrics(each_function["function_lines"], file_and_contents["file_extension"])
-                        maintainability_index =  self.code_metric_calculator.calc_maintainability(halstead_metrics["v_volume"], complexity, loc["loc_code"])
-
-                        code_metrics.append({
-                            "run_timestamp": self.timestamp,
-                            "filepath": os.path.dirname(full_filepath),
-                            "file_extension": file_and_contents["file_extension"],
-                            "filename": file_and_contents["filename"],
-                            "function_name": each_function["function_name"],
-                            **loc,  # this is called "dict unpacking"
-                            "cyclocomplexity": complexity,
-                            **halstead_metrics,
-                            "maintainability_index": maintainability_index,
-                        })
-
-                    # metrics for code not found inside functions, aka global or top level code
-                    top_level_code = self.function_extractor.extract_top_level_code(file_and_contents["lines"])
-                    loc_module = self.code_metric_calculator.count_lines_of_code(top_level_code[0]["function_lines"], file_and_contents["file_extension"])
-                    complexity_module = self.code_metric_calculator.calc_cyclomatic_complexity(top_level_code[0]["function_lines"], file_and_contents["file_extension"])
-                    halstead_metrics_module = self.code_metric_calculator.calc_halstead_metrics(top_level_code[0]["function_lines"], file_and_contents["file_extension"])
-                    maintainability_index_module = self.code_metric_calculator.calc_maintainability(halstead_metrics_module["v_volume"], complexity_module, loc_module["loc_code"])
-
-                    # this will append a fina row per script for top_level_code metrics
-                    code_metrics.append({
-                        "run_timestamp": self.timestamp,
-                        "filepath": os.path.dirname(full_filepath),
-                        "file_extension": file_and_contents["file_extension"],
-                        "filename": file_and_contents["filename"],
-                        "function_name": top_level_code[0]["function_name"],
-                        **loc_module,
-                        "cyclocomplexity": complexity_module,
-                        **halstead_metrics_module,
-                        "maintainability_index": maintainability_index_module,
-                    })
+                    code_metrics.extend(self.calculate_metrics(full_filepath, file_and_contents, functions))
 
         return code_metrics
 
-    def run_analysis(self):
+    def filter_directories(self, dirs):
+        return [dir for dir in dirs if dir not in self.directories_to_skip]
+
+    def extract_functions(self, file_and_contents):
+        return self.function_extractor.extract_functions(file_and_contents["lines"], file_and_contents["file_extension"])
+
+    def calculate_metrics(self, full_filepath, file_and_contents, functions):
+        code_metrics = []
+
+        for function in functions:
+            loc = self.code_metric_calculator.count_lines_of_code(function["function_lines"], file_and_contents["file_extension"])
+            complexity = self.code_metric_calculator.calc_cyclomatic_complexity(function["function_lines"], file_and_contents["file_extension"])
+            halstead_metrics = self.code_metric_calculator.calc_halstead_metrics(function["function_lines"], file_and_contents["file_extension"])
+            maintainability_index = self.calculate_maintainability(halstead_metrics, complexity, loc)
+
+            code_metrics.append({
+                "run_timestamp": self.timestamp,
+                "filepath": os.path.dirname(full_filepath),
+                "file_extension": file_and_contents["file_extension"],
+                "filename": file_and_contents["filename"],
+                "function_name": function["function_name"],
+                **loc,
+                "cyclocomplexity": complexity,
+                **halstead_metrics,
+                "maintainability_index": maintainability_index,
+            })
+
+        # code_metrics += self.calculate_top_level_metrics(full_filepath, file_and_contents)
+        code_metrics.extend(self.calculate_top_level_metrics(full_filepath, file_and_contents))
+        return code_metrics
+
+    def calculate_maintainability(self, halstead_metrics, complexity, loc):
+        return self.code_metric_calculator.calc_maintainability(halstead_metrics["v_volume"], complexity, loc["loc_code"])
+
+    def calculate_top_level_metrics(self, full_filepath, file_and_contents):
+        top_level_code = self.function_extractor.extract_top_level_code(file_and_contents["lines"])
+        loc_module = self.code_metric_calculator.count_lines_of_code(top_level_code[0]["function_lines"], file_and_contents["file_extension"])
+        complexity_module = self.code_metric_calculator.calc_cyclomatic_complexity(top_level_code[0]["function_lines"], file_and_contents["file_extension"])
+        halstead_metrics_module = self.code_metric_calculator.calc_halstead_metrics(top_level_code[0]["function_lines"], file_and_contents["file_extension"])
+        maintainability_index_module = self.calculate_maintainability(halstead_metrics_module, complexity_module, loc_module)
+
+        return [{
+            "run_timestamp": self.timestamp,
+            "filepath": os.path.dirname(full_filepath),
+            "file_extension": file_and_contents["file_extension"],
+            "filename": file_and_contents["filename"],
+            "function_name": top_level_code[0]["function_name"],
+            **loc_module,
+            "cyclocomplexity": complexity_module,
+            **halstead_metrics_module,
+            "maintainability_index": maintainability_index_module,
+        }]
+
+
+    def run_analysis(self, target_codepath):
         code_metrics = self.collect_code_metrics(target_codepath)
 
         # create df
@@ -469,8 +491,6 @@ if __name__ == "__main__":
     target_codepath = r"G:\My Drive\github\software_quality_metrics\scripts"  # update as needed
     directories_to_skip = ["venv", "conda", "git", "renv"]  # update as needed
     handled_extensions = (".py", ".r", ".sql")
-    # code_metrics = {}
 
     analyzer = CodeAnalyzer(target_codepath, directories_to_skip, handled_extensions)
-    analyzer.run_analysis()
-
+    analyzer.run_analysis(target_codepath)
