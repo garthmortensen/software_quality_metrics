@@ -1,12 +1,25 @@
 import os
 import pandas as pd
-from tabulate import tabulate  # for pretty print
 import datetime  # for timestamp
 import math  # for halstead
 
+from tabulate import tabulate  # for pretty print
 
 class FileReader:
-    def read_and_strip_file(self, filepath):
+    
+    def read_and_strip_file(self, filepath: str) -> dict:
+        """
+        Reads a file, strips its lines, and returns a list of results.
+
+        Args:
+            filepath (str): The path to the file to be read.
+
+        Returns:
+            dict: A dictionary containing the following keys:
+                - 'filename' (str): The lowercased name of the file.
+                - 'file_extension' (str): The lowercased file extension.
+                - 'lines' (list): A list of stripped and lowercased lines from the file.
+        """
         with open(filepath, "r") as file:
             lines = file.readlines()
 
@@ -31,7 +44,23 @@ class FileReader:
 
 
 class CodeSplitter:
-    def split_into_code_lines_and_comment_lines(self, lines, file_extension):
+    def split_into_code_lines_and_comment_lines(self, lines: list, file_extension: str) -> tuple:
+        """
+        Analyzes a list of lines and categorizes them into code lines and comment lines
+        based on the provided file extension. It supports various file extensions and handles both
+        single-line and multi-line comments.
+
+        Args:
+            lines (list): The list of lines to be analyzed.
+            file_extension (str): The file extension of the code to determine the comment style.
+
+        Returns:
+            tuple: A tuple containing two lists - code lines and comment lines.
+
+        Example:
+            splitter = CodeSplitter()
+            code_lines, comment_lines = splitter.split_into_code_lines_and_comment_lines(file_lines, ".py")
+        """
         # code can be condensed to many lines, so line count isnt everything
         # readability matters!
 
@@ -113,7 +142,26 @@ class CodeSplitter:
 
 
 class FunctionExtractor:
-    def extract_functions(self, lines, file_extension):
+    def extract_functions(self, lines: list, file_extension: str):
+        """
+        Extracts functions from the given lines based on the file extension.
+
+        Args:
+            lines (list): The list of lines to extract functions from.
+            file_extension (str): The file extension used to determine the programming language.
+
+        Returns:
+            A list of dictionaries, each containing:
+                - 'function_name' (str): The name of the extracted function.
+                - 'function_lines' (list): The lines of code belonging to the function.
+
+        Example:
+            extractor = FunctionExtractor()
+            functions = extractor.extract_functions(lines, ".py")
+
+        Note:
+            Returns an empty list for unsupported file extensions.
+        """
         if file_extension == ".py":
             return self.extract_functions_py(lines)
         elif file_extension == ".r":
@@ -123,12 +171,14 @@ class FunctionExtractor:
         else:
             return []
 
+
     def extract_top_level_code(self, lines):
         top_level_code = {
             "function_name": "_FILE_TOTAL",  # _ so that it appears first after df sort
             "function_lines": lines,
         }
         return [top_level_code]
+
 
     def extract_functions_py(self, lines):
         """shortcoming: the final function will include all following top level lines of code."""
@@ -165,6 +215,7 @@ class FunctionExtractor:
             )
 
         return functions
+
 
     def extract_functions_r(self, lines):
         functions = []
