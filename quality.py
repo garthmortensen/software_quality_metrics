@@ -7,7 +7,7 @@ import math  # for halstead
 
 class FileReader:
     def read_and_strip_file(self, filepath):
-        with open(filepath, 'r') as file:
+        with open(filepath, "r") as file:
             lines = file.readlines()
 
             # remove blank lines and lower case
@@ -19,15 +19,16 @@ class FileReader:
 
         filename = os.path.basename(filepath).lower()
         file_extension = os.path.splitext(filename)[1].lower()
-        
+
         # return a dictionary
         file_and_contents = {
             "filename": filename,
             "file_extension": file_extension,
             "lines": stripped_lines,
         }
-        
+
         return file_and_contents
+
 
 class CodeSplitter:
     def split_into_code_lines_and_comment_lines(self, lines, file_extension):
@@ -35,17 +36,17 @@ class CodeSplitter:
         # readability matters!
 
         if file_extension == ".py":  # ISSUE: recognizes multiline strings as comments
-            comment_indicator = ("#")
+            comment_indicator = "#"
             comment_block_start = ("'''", '"""')
             comment_block_stop = ("'''", '"""')
         elif file_extension == ".r":
-            comment_indicator = ("#")
+            comment_indicator = "#"
             comment_block_start = ("'''", '"""')
             comment_block_stop = ("'''", '"""')
         elif file_extension == ".sql":
-            comment_indicator = ("--")
-            comment_block_start = ("/*")
-            comment_block_stop = ("*/")
+            comment_indicator = "--"
+            comment_block_start = "/*"
+            comment_block_stop = "*/"
         else:
             print("Unhandled file extension")
             exit
@@ -58,19 +59,25 @@ class CodeSplitter:
         for line in lines:
             # parsing python is difficult due to whitespace, no returns, many docstrings, etc. so wishy washy...
             # check for start of docstring
-            if (previous_line is not None
-                and "def " in previous_line 
-                and (line == "'''" or line == '"""')):  # line contains only ''' appearing after def, we assume docstring begins
+            if (
+                previous_line is not None
+                and "def " in previous_line
+                and (line == "'''" or line == '"""')
+            ):  # line contains only ''' appearing after def, we assume docstring begins
                 in_comment_block = True
                 comment_lines.append(line)
                 continue
             # check for only triple quote appearing on line, not following a def statement
-            elif (line == "'''" or line == '"""'):  # line contains only ''' appearing NOT after def, we ASSUME docstring ends
+            elif (
+                line == "'''" or line == '"""'
+            ):  # line contains only ''' appearing NOT after def, we ASSUME docstring ends
                 in_comment_block = False
                 comment_lines.append(line)
                 continue
             # check for single line comment block
-            elif line.startswith(comment_block_start) and line.endswith(comment_block_start):  # '''hello''' single line docstring
+            elif line.startswith(comment_block_start) and line.endswith(
+                comment_block_start
+            ):  # '''hello''' single line docstring
                 in_comment_block = False
                 comment_lines.append(line)
                 continue
@@ -83,12 +90,12 @@ class CodeSplitter:
                 # which start and stop with the same string
                 if line.endswith(comment_block_stop):
                     in_comment_block = False
-                    # this prevents double appending a multiline comment blocks 
+                    # this prevents double appending a multiline comment blocks
                     # with starts AND ends with a multiline comments, e.g. /* hello world */
                     if line not in comment_lines:
                         comment_lines.append(line)
                 else:
-                    # this prevents double appending a multiline comment blocks 
+                    # this prevents double appending a multiline comment blocks
                     # with starts AND ends with a multiline comments, e.g. /* hello world */
                     if line not in comment_lines:
                         comment_lines.append(line)
@@ -106,7 +113,6 @@ class CodeSplitter:
 
 
 class FunctionExtractor:
-
     def extract_functions(self, lines, file_extension):
         if file_extension == ".py":
             return self.extract_functions_py(lines)
@@ -117,14 +123,12 @@ class FunctionExtractor:
         else:
             return []
 
-
     def extract_top_level_code(self, lines):
         top_level_code = {
             "function_name": "_FILE_TOTAL",  # _ so that it appears first after df sort
             "function_lines": lines,
         }
         return [top_level_code]
-
 
     def extract_functions_py(self, lines):
         """shortcoming: the final function will include all following top level lines of code."""
@@ -135,28 +139,32 @@ class FunctionExtractor:
         for line in lines:  # the whole program
             # this whole block only captures function name
             if line.startswith("def "):
-
                 # when first reaches def, None and skips this...
                 if current_function:
-                    functions.append({
-                        "function_name": current_function,
-                        "function_lines": current_function_lines,
-                    })
+                    functions.append(
+                        {
+                            "function_name": current_function,
+                            "function_lines": current_function_lines,
+                        }
+                    )
 
                 # ...then picks up function name
-                current_function = line[4:].split("(")[0]  # transform "def meow(name: str) -> meow_name:" to "meow"
+                current_function = line[4:].split("(")[
+                    0
+                ]  # transform "def meow(name: str) -> meow_name:" to "meow"
                 current_function_lines = [line]
             elif current_function:
                 current_function_lines.append(line)
 
         if current_function:
-            functions.append({
-                "function_name": current_function,
-                "function_lines": current_function_lines,
-            })
+            functions.append(
+                {
+                    "function_name": current_function,
+                    "function_lines": current_function_lines,
+                }
+            )
 
         return functions
-
 
     def extract_functions_r(self, lines):
         functions = []
@@ -165,39 +173,46 @@ class FunctionExtractor:
 
         for line in lines:  # the whole program
             # this whole block only captures function name
-            if ("function(" in line and "{" in line):
-
+            if "function(" in line and "{" in line:
                 # when first reaches def, None and skips this...
                 if current_function:
-                    functions.append({
-                        "function_name": current_function,
-                        "function_lines": current_function_lines,
-                    })
+                    functions.append(
+                        {
+                            "function_name": current_function,
+                            "function_lines": current_function_lines,
+                        }
+                    )
 
                 # ...then picks up function name
-                current_function = line.split("<-")[0].strip()  # transform "meow <- function(name) {" to "meow"
+                current_function = line.split("<-")[
+                    0
+                ].strip()  # transform "meow <- function(name) {" to "meow"
                 current_function_lines = [line]
             elif current_function:
                 current_function_lines.append(line)
 
         if current_function:
-            functions.append({
-                "function_name": current_function,
-                "function_lines": current_function_lines,
-            })
+            functions.append(
+                {
+                    "function_name": current_function,
+                    "function_lines": current_function_lines,
+                }
+            )
 
         return functions
-
 
     def extract_functions_sql(self, lines):
         functions = []
 
-        functions.append({
-            "function_name": "none",
-            "function_lines": lines,
-        })
+        functions.append(
+            {
+                "function_name": "none",
+                "function_lines": lines,
+            }
+        )
 
         return functions
+
 
 class CodeMetricsCalculator:
     def __init__(self):
@@ -211,7 +226,12 @@ class CodeMetricsCalculator:
         """
         loc_total = len(lines)  # get total lines
         code_splitter = CodeSplitter()
-        code_lines, comment_lines = self.code_splitter.split_into_code_lines_and_comment_lines(lines, file_extension)
+        (
+            code_lines,
+            comment_lines,
+        ) = self.code_splitter.split_into_code_lines_and_comment_lines(
+            lines, file_extension
+        )
 
         # handle for when functions are all comments (eg code stubs)
         if code_lines is None:
@@ -234,29 +254,55 @@ class CodeMetricsCalculator:
 
         return loc
 
-
     def calc_cyclomatic_complexity(self, lines, file_extension):
         # flat is better. Rotate python code 90 degrees counter clockwise, and the mountain range indicates challenge
         # check gitblame to see why complications are added
         # interpretation: https://radon.readthedocs.io/en/latest/commandline.html
-        code_lines, comment_lines = self.code_splitter.split_into_code_lines_and_comment_lines(lines, file_extension)
+        (
+            code_lines,
+            comment_lines,
+        ) = self.code_splitter.split_into_code_lines_and_comment_lines(
+            lines, file_extension
+        )
 
         cyclomatic_complexity = 1  # base complexity
 
         # conditionally search for language specific control flow keywords
         if file_extension == ".py":
             # TODO: improve according to https://radon.readthedocs.io/en/latest/intro.html#cyclomatic-complexity
-            control_flow_keywords = ("if ", "elif ", "for ", "while ", "except", "with ", 
-                                    "assert ", "comprehension ", "and ", "or " "map(", "lambda ")
-        elif file_extension == ".r" or file_extension == ".rmd": 
+            control_flow_keywords = (
+                "if ",
+                "elif ",
+                "for ",
+                "while ",
+                "except",
+                "with ",
+                "assert ",
+                "comprehension ",
+                "and ",
+                "or " "map(",
+                "lambda ",
+            )
+        elif file_extension == ".r" or file_extension == ".rmd":
             control_flow_keywords = ("if ", "else if ", "while ", "for ")
         elif file_extension == ".sql":
-            control_flow_keywords = ("select ", "from ", "where ", "join ", "inner join ", "left join ", "right join ", "outer join ", "union ", "except ", "intersect ")
+            control_flow_keywords = (
+                "select ",
+                "from ",
+                "where ",
+                "join ",
+                "inner join ",
+                "left join ",
+                "right join ",
+                "outer join ",
+                "union ",
+                "except ",
+                "intersect ",
+            )
         else:
             decision_points = ()
 
         for line in code_lines:
-
             decision_points = 0
             for control_flow_keyword in control_flow_keywords:
                 decision_points += line.count(control_flow_keyword)
@@ -265,7 +311,6 @@ class CodeMetricsCalculator:
 
         return cyclomatic_complexity
 
-        
     def calc_halstead_metrics(self, lines, file_extension):
         # halstead metrics been around 50 years
         # source: https://www.geeksforgeeks.org/software-engineering-halsteads-software-metrics/
@@ -279,14 +324,44 @@ class CodeMetricsCalculator:
         # effort = volume x difficulty?
 
         N1_operators_total = list()
-        N2_operands_total = list()  # lists are not distinct (total), which halstead equation requires
+        N2_operands_total = (
+            list()
+        )  # lists are not distinct (total), which halstead equation requires
 
-        operators = ['+', '-', '*', '/', '%', '=',  # arithmetic
-                    '==', '!=', '<', '>', '<=', '>=',  # comparisons
-                    'and ', '& ', 'or ', '| ',  'not ', '!',  # logic
-                    'if ', 'else ', 'while ', 'for ', 'def ', 'function ', 'return ',]  # keywords
+        operators = [
+            "+",
+            "-",
+            "*",
+            "/",
+            "%",
+            "=",  # arithmetic
+            "==",
+            "!=",
+            "<",
+            ">",
+            "<=",
+            ">=",  # comparisons
+            "and ",
+            "& ",
+            "or ",
+            "| ",
+            "not ",
+            "!",  # logic
+            "if ",
+            "else ",
+            "while ",
+            "for ",
+            "def ",
+            "function ",
+            "return ",
+        ]  # keywords
 
-        code_lines, comment_lines = self.code_splitter.split_into_code_lines_and_comment_lines(lines, file_extension)  # halstead ignores comments
+        (
+            code_lines,
+            comment_lines,
+        ) = self.code_splitter.split_into_code_lines_and_comment_lines(
+            lines, file_extension
+        )  # halstead ignores comments
         for line in code_lines:
             tokens = line.split()
             for token in tokens:
@@ -301,20 +376,34 @@ class CodeMetricsCalculator:
         n1_operators_distinct = set(N1_operators_total)
         n2_operands_distinct = set(N2_operands_total)
 
-        n_program_vocab = len(n1_operators_distinct) + len(n2_operands_distinct)  # total distinct
+        n_program_vocab = len(n1_operators_distinct) + len(
+            n2_operands_distinct
+        )  # total distinct
         N_program_len = len(N1_operators_total) + len(N2_operands_total)  # total
-        v_volume = int(N_program_len * math.log(n_program_vocab, 2)) if n_program_vocab > 0 else 0  # does this indicate filesize?
-        d_difficulty = round((len(n1_operators_distinct) / 2) * (len(N2_operands_total) / len(n2_operands_distinct)), 2) if len(n2_operands_distinct) > 0 else 0
+        v_volume = (
+            int(N_program_len * math.log(n_program_vocab, 2))
+            if n_program_vocab > 0
+            else 0
+        )  # does this indicate filesize?
+        d_difficulty = (
+            round(
+                (len(n1_operators_distinct) / 2)
+                * (len(N2_operands_total) / len(n2_operands_distinct)),
+                2,
+            )
+            if len(n2_operands_distinct) > 0
+            else 0
+        )
         e_effort = int(d_difficulty * v_volume)  # good
         implement_time_t = int(e_effort / 18)  # good
-        bugs_deliver_b = int((e_effort ** 2) / 3000)  # good
+        bugs_deliver_b = int((e_effort**2) / 3000)  # good
 
         halstead_metrics = {
             # total count of all operators, including duplicates
             # how many times operators are used overall in the code
             "n1_operators_distinct": len(n1_operators_distinct),
             # total count of all operands used in the code, including duplicates
-            # how many times operands (variables or values) are used overall 
+            # how many times operands (variables or values) are used overall
             "n2_operands_distinct": len(n2_operands_distinct),
             # count of unique operators (e.g., +, -, =, if)
             # how many different types of operations or actions are performed
@@ -357,13 +446,21 @@ class CodeMetricsCalculator:
         # based on halstead metrics
         # more syntax/variables, more nesting, more code = unmaintainable
         # fewer syntax/vafiables, flat code, shorter code = maintainable
-        maintainability_index = int(max(0, (A
-                                        - (B * math.log(v_volume)) 
-                                        - (C * cyclomatic_complexity) 
-                                        - (D * math.log(loc))
-                                        ) * 100 / A))
+        maintainability_index = int(
+            max(
+                0,
+                (
+                    A
+                    - (B * math.log(v_volume))
+                    - (C * cyclomatic_complexity)
+                    - (D * math.log(loc))
+                )
+                * 100
+                / A,
+            )
+        )
 
-        # 00-25  = unmaintainable - single responsibility principal. no code should try to do everything. 
+        # 00-25  = unmaintainable - single responsibility principal. no code should try to do everything.
         # 25-30  = concerning
         # 50-75  = needs improvements. common in the real world
         # 75-100 = excellent
@@ -381,9 +478,10 @@ class CodeAnalyzer:
         self.code_metrics = []
         # composition. this class is composed of many others. more flexible and maintainable than inheritance
         self.file_reader = FileReader()  # create an instance of FileReader
-        self.function_extractor = FunctionExtractor()  # create an instance of FunctionExtractor
+        self.function_extractor = (
+            FunctionExtractor()
+        )  # create an instance of FunctionExtractor
         self.code_metric_calculator = CodeMetricsCalculator()
-
 
     def extract_functions(self, file_contents, file_extension):
         """Extract functions from scripts, given file extension."""
@@ -397,10 +495,8 @@ class CodeAnalyzer:
             print(f"unhandled extension: {file_extension}")
             return []
 
-
     def skippable_directory(self, directory_name):
         return directory_name in directories_to_skip
-
 
     def collect_code_metrics(self, directory):
         code_metrics = []
@@ -411,10 +507,16 @@ class CodeAnalyzer:
             for each_file in files:
                 if each_file.lower().endswith(self.handled_extensions):
                     full_filepath = os.path.join(root, each_file)
-                    file_and_contents = self.file_reader.read_and_strip_file(full_filepath)
+                    file_and_contents = self.file_reader.read_and_strip_file(
+                        full_filepath
+                    )
                     functions = self.extract_functions(file_and_contents)
 
-                    code_metrics.extend(self.calculate_metrics(full_filepath, file_and_contents, functions))
+                    code_metrics.extend(
+                        self.calculate_metrics(
+                            full_filepath, file_and_contents, functions
+                        )
+                    )
 
         return code_metrics
 
@@ -422,55 +524,82 @@ class CodeAnalyzer:
         return [dir for dir in dirs if dir not in self.directories_to_skip]
 
     def extract_functions(self, file_and_contents):
-        return self.function_extractor.extract_functions(file_and_contents["lines"], file_and_contents["file_extension"])
+        return self.function_extractor.extract_functions(
+            file_and_contents["lines"], file_and_contents["file_extension"]
+        )
 
     def calculate_metrics(self, full_filepath, file_and_contents, functions):
         code_metrics = []
 
         for function in functions:
-            loc = self.code_metric_calculator.count_lines_of_code(function["function_lines"], file_and_contents["file_extension"])
-            complexity = self.code_metric_calculator.calc_cyclomatic_complexity(function["function_lines"], file_and_contents["file_extension"])
-            halstead_metrics = self.code_metric_calculator.calc_halstead_metrics(function["function_lines"], file_and_contents["file_extension"])
-            maintainability_index = self.calculate_maintainability(halstead_metrics, complexity, loc)
+            loc = self.code_metric_calculator.count_lines_of_code(
+                function["function_lines"], file_and_contents["file_extension"]
+            )
+            complexity = self.code_metric_calculator.calc_cyclomatic_complexity(
+                function["function_lines"], file_and_contents["file_extension"]
+            )
+            halstead_metrics = self.code_metric_calculator.calc_halstead_metrics(
+                function["function_lines"], file_and_contents["file_extension"]
+            )
+            maintainability_index = self.calculate_maintainability(
+                halstead_metrics, complexity, loc
+            )
 
-            code_metrics.append({
+            code_metrics.append(
+                {
+                    "run_timestamp": self.timestamp,
+                    "filepath": os.path.dirname(full_filepath),
+                    "file_extension": file_and_contents["file_extension"],
+                    "filename": file_and_contents["filename"],
+                    "function_name": function["function_name"],
+                    **loc,
+                    "cyclocomplexity": complexity,
+                    **halstead_metrics,
+                    "maintainability_index": maintainability_index,
+                }
+            )
+
+        # code_metrics += self.calculate_top_level_metrics(full_filepath, file_and_contents)
+        code_metrics.extend(
+            self.calculate_top_level_metrics(full_filepath, file_and_contents)
+        )
+        return code_metrics
+
+    def calculate_maintainability(self, halstead_metrics, complexity, loc):
+        return self.code_metric_calculator.calc_maintainability(
+            halstead_metrics["v_volume"], complexity, loc["loc_code"]
+        )
+
+    def calculate_top_level_metrics(self, full_filepath, file_and_contents):
+        top_level_code = self.function_extractor.extract_top_level_code(
+            file_and_contents["lines"]
+        )
+        loc_module = self.code_metric_calculator.count_lines_of_code(
+            top_level_code[0]["function_lines"], file_and_contents["file_extension"]
+        )
+        complexity_module = self.code_metric_calculator.calc_cyclomatic_complexity(
+            top_level_code[0]["function_lines"], file_and_contents["file_extension"]
+        )
+        halstead_metrics_module = self.code_metric_calculator.calc_halstead_metrics(
+            top_level_code[0]["function_lines"], file_and_contents["file_extension"]
+        )
+        maintainability_index_module = self.calculate_maintainability(
+            halstead_metrics_module, complexity_module, loc_module
+        )
+
+        return [
+            {
                 "run_timestamp": self.timestamp,
                 "filepath": os.path.dirname(full_filepath),
                 "file_extension": file_and_contents["file_extension"],
                 "filename": file_and_contents["filename"],
-                "function_name": function["function_name"],
-                **loc,
-                "cyclocomplexity": complexity,
-                **halstead_metrics,
-                "maintainability_index": maintainability_index,
-            })
-
-        # code_metrics += self.calculate_top_level_metrics(full_filepath, file_and_contents)
-        code_metrics.extend(self.calculate_top_level_metrics(full_filepath, file_and_contents))
-        return code_metrics
-
-    def calculate_maintainability(self, halstead_metrics, complexity, loc):
-        return self.code_metric_calculator.calc_maintainability(halstead_metrics["v_volume"], complexity, loc["loc_code"])
-
-    def calculate_top_level_metrics(self, full_filepath, file_and_contents):
-        top_level_code = self.function_extractor.extract_top_level_code(file_and_contents["lines"])
-        loc_module = self.code_metric_calculator.count_lines_of_code(top_level_code[0]["function_lines"], file_and_contents["file_extension"])
-        complexity_module = self.code_metric_calculator.calc_cyclomatic_complexity(top_level_code[0]["function_lines"], file_and_contents["file_extension"])
-        halstead_metrics_module = self.code_metric_calculator.calc_halstead_metrics(top_level_code[0]["function_lines"], file_and_contents["file_extension"])
-        maintainability_index_module = self.calculate_maintainability(halstead_metrics_module, complexity_module, loc_module)
-
-        return [{
-            "run_timestamp": self.timestamp,
-            "filepath": os.path.dirname(full_filepath),
-            "file_extension": file_and_contents["file_extension"],
-            "filename": file_and_contents["filename"],
-            "function_name": top_level_code[0]["function_name"],
-            **loc_module,
-            "cyclocomplexity": complexity_module,
-            **halstead_metrics_module,
-            "maintainability_index": maintainability_index_module,
-        }]
-
+                "function_name": top_level_code[0]["function_name"],
+                **loc_module,
+                "cyclocomplexity": complexity_module,
+                **halstead_metrics_module,
+                "maintainability_index": maintainability_index_module,
+            }
+        ]
 
     def run_analysis(self, target_codepath):
         code_metrics = self.collect_code_metrics(target_codepath)
@@ -488,7 +617,9 @@ class CodeAnalyzer:
 
 
 if __name__ == "__main__":
-    target_codepath = r"G:\My Drive\github\software_quality_metrics\scripts"  # update as needed
+    target_codepath = (
+        r"G:\My Drive\github\software_quality_metrics\scripts"  # update as needed
+    )
     directories_to_skip = ["venv", "conda", "git", "renv"]  # update as needed
     handled_extensions = (".py", ".r", ".sql")
 
