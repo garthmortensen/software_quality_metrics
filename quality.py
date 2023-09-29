@@ -5,8 +5,8 @@ import math  # for halstead
 
 from tabulate import tabulate  # for pretty print
 
+
 class FileReader:
-    
     def read_and_strip_file(self, filepath: str) -> dict:
         """
         Reads a file, strips its lines, and returns a list of results.
@@ -44,7 +44,9 @@ class FileReader:
 
 
 class CodeSplitter:
-    def split_into_code_lines_and_comment_lines(self, lines: list, file_extension: str) -> tuple:
+    def split_into_code_lines_and_comment_lines(
+        self, lines: list, file_extension: str
+    ) -> tuple:
         """
         Analyzes a list of lines and categorizes them into code lines and comment lines
         based on the provided file extension. It supports various file extensions and handles both
@@ -171,14 +173,12 @@ class FunctionExtractor:
         else:
             return []
 
-
     def extract_top_level_code(self, lines):
         top_level_code = {
             "function_name": "_FILE_TOTAL",  # _ so that it appears first after df sort
             "function_lines": lines,
         }
         return [top_level_code]
-
 
     def extract_functions_py(self, lines):
         """shortcoming: the final function will include all following top level lines of code."""
@@ -215,7 +215,6 @@ class FunctionExtractor:
             )
 
         return functions
-
 
     def extract_functions_r(self, lines):
         functions = []
